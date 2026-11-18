@@ -1,0 +1,17 @@
+mode: pseudobulk
+genome: hg19
+samples: config/samples.paired.tsv
+checksums: config/checksums.pseudobulk.json
+seed: 42
+pseudobulk:
+  # These inputs must be prepared from fragments on one shared peak universe.
+  matrix: data/paired/counts.mtx.gz
+  features: data/paired/features.tsv
+  barcodes: data/paired/barcodes.tsv
+  cells: data/paired/cells.tsv
+  celltype: CD14_monocyte
+  control: Control6h
+  treatment: LPS6h
+  min_cells: 30
+  min_pairs: 4
+  rationale: "Four matched GSE178428 donors at 6 h without Golgi inhibitor; CD14_monocyte is a proposed lineage whose labels and per-group support must be reviewed before execution."
