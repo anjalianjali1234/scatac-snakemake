@@ -1,0 +1,2 @@
+sample	donor	condition	genome	counts_h5	metadata_csv	fragments	fragments_index
+pbmc10k	donor1	healthy	hg38	data/pbmc10k/filtered_peak_bc_matrix.h5	data/pbmc10k/singlecell.csv	data/pbmc10k/fragments.tsv.gz	data/pbmc10k/fragments.tsv.gz.tbi
