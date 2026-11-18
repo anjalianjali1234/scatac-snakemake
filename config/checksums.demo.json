@@ -1,0 +1,5 @@
+{
+  "config/samples.demo.tsv": "2096f36808531279674ea9d28b2a8a6cfb260821c35c1fdca639df61b51f29d9",
+  "tests/data/cells.tsv": "dbfd744392a193d5e1b97ee600508df57a94b047b642ddde6b931bff4227fcce",
+  "tests/data/counts.csv": "35139d47243c74f1109046b9625ddf7d90e848d486fc189f955a55b982353bd1"
+}
