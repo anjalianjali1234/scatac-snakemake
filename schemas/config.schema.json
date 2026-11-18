@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["mode", "genome", "samples", "checksums", "seed"],
+  "properties": {
+    "mode": {"enum": ["demo", "atlas", "pseudobulk"]},
+    "genome": {"enum": ["synthetic", "hg38", "hg19"]},
+    "samples": {"type": "string", "minLength": 1},
+    "checksums": {"type": "string", "minLength": 1},
+    "seed": {"type": "integer", "minimum": 1},
+    "demo": {"type": "object", "required": ["counts", "cells"]},
+    "atlas": {"type": "object", "required": ["max_cells", "qc", "lsi"]},
+    "pseudobulk": {"type": "object", "required": ["matrix", "features", "barcodes", "cells", "celltype", "control", "treatment", "min_cells", "min_pairs", "rationale"]}
+  },
+  "allOf": [
+    {"if": {"properties": {"mode": {"const": "demo"}}}, "then": {"required": ["demo"], "properties": {"genome": {"const": "synthetic"}}}},
+    {"if": {"properties": {"mode": {"const": "atlas"}}}, "then": {"required": ["atlas"], "properties": {"genome": {"const": "hg38"}}}},
+    {"if": {"properties": {"mode": {"const": "pseudobulk"}}}, "then": {"required": ["pseudobulk"], "properties": {"genome": {"enum": ["hg19", "hg38"]}}}}
+  ]
+}
