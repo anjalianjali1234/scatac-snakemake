@@ -1,0 +1,116 @@
+import json
+import sys
+from pathlib import Path
+from snakemake.utils import min_version, validate
+
+min_version("9.27.2")
+configfile: "config/config.yaml"
+
+ROOT = Path(workflow.basedir).parent.resolve()
+validate(config, str(ROOT / "schemas" / "config.schema.json"))
+PYTHON = sys.executable
+sys.path.insert(0, str(ROOT / "workflow" / "scripts"))
+from common import input_paths, load_samples, validate_settings
+
+validate_settings(config)
+MODE = config["mode"]
+SAMPLES = load_samples(config["samples"], MODE, config["genome"])
+FILES = input_paths(config, SAMPLES)
+SOURCE = sorted(str(p.relative_to(ROOT)) for folder in ["workflow", "schemas"]
+                for p in (ROOT / folder).rglob("*")
+                if p.is_file() and "__pycache__" not in p.parts)
+CONFIG_JSON = json.dumps(config, sort_keys=True)
+TARGET = f"results/{MODE}/report.html"
+
+
+rule all:
+    input:
+        TARGET
+
+
+rule audit_inputs:
+    input:
+        data=FILES,
+        samples=config["samples"],
+        checksums=config["checksums"],
+        source=SOURCE,
+        engine_lock="requirements.lock"
+    output:
+        manifest=f"results/{MODE}/provenance.json"
+    params:
+        settings=CONFIG_JSON
+    log:
+        f"logs/{MODE}/audit.log"
+    resources:
+        mem_mb=512
+    shell:
+        "{PYTHON:q} workflow/scripts/audit.py --settings {params.settings:q} "
+        "--output {output.manifest:q} > {log:q} 2>&1"
+
+
+if MODE == "demo":
+    rule module1_demo:
+        input:
+            counts=config["demo"]["counts"],
+            cells=config["demo"]["cells"],
+            provenance=rules.audit_inputs.output.manifest,
+            script="workflow/scripts/demo.py"
+        output:
+            cells="results/demo/cell_summary.csv",
+            regions="results/demo/region_summary.csv",
+            figure="results/demo/panel_counts.svg",
+            summary="results/demo/summary.json"
+        log:
+            "logs/demo/module1.log"
+        benchmark:
+            "benchmarks/demo/module1.tsv"
+        resources:
+            mem_mb=256
+        shell:
+            "{PYTHON:q} {input.script:q} --counts {input.counts:q} --cells {input.cells:q} "
+            "--output results/demo > {log:q} 2>&1"
+
+    rule module1_r:
+        input:
+            counts=config["demo"]["counts"],
+            cells=config["demo"]["cells"],
+            provenance=rules.audit_inputs.output.manifest,
+            script="workflow/scripts/module01.R"
+        output:
+            cells="results/demo_r/cell_summary.csv",
+            regions="results/demo_r/region_summary.csv",
+            figure="results/demo_r/panel_counts.pdf",
+            session="results/demo_r/sessionInfo.txt"
+        conda:
+            "envs/r-base.yaml"
+        log:
+            "logs/demo/module1_r.log"
+        resources:
+            mem_mb=1024
+        shell:
+            "Rscript --vanilla {input.script:q} {input.counts:q} {input.cells:q} "
+            "results/demo_r > {log:q} 2>&1"
+
+    rule demo_report:
+        input:
+            summary=rules.module1_demo.output.summary,
+            figure=rules.module1_demo.output.figure,
+            provenance=rules.audit_inputs.output.manifest,
+            script="workflow/scripts/report.py"
+        output:
+            TARGET
+        params:
+            title="Module 1 synthetic accessibility demonstration"
+        log:
+            "logs/demo/report.log"
+        resources:
+            mem_mb=256
+        shell:
+            "{PYTHON:q} {input.script:q} --title {params.title:q} --summary {input.summary:q} "
+            "--provenance {input.provenance:q} --output {output:q} > {log:q} 2>&1"
+
+elif MODE == "atlas":
+    include: "rules/atlas.smk"
+
+elif MODE == "pseudobulk":
+    include: "rules/pseudobulk.smk"
