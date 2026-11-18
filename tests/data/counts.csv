@@ -1,0 +1,6 @@
+region,A1,A2,A3,B1,B2,B3
+shared_region,4,2,3,4,2,3
+region_A,3,2,1,0,0,0
+region_B,0,0,0,3,1,2
+ambiguous_region,1,0,0,0,1,0
+unobserved_region,0,0,0,0,0,0
