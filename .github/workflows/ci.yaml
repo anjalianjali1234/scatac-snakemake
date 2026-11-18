@@ -1,0 +1,40 @@
+name: Teaching workflow checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7, verified 2026-11-18
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12.14'
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.5.1'
+      - name: Install the recorded Python environment
+        run: python -m pip install -r requirements.lock
+      - name: Validate input contracts and R/Python agreement
+        run: python -m unittest discover -s tests -v
+      - name: Parse all R scripts
+        run: Rscript --vanilla -e 'invisible(lapply(list.files("workflow/scripts", "[.]R$", full.names=TRUE), parse))'
+      - name: Plan and execute the offline workflow
+        run: |
+          snakemake --cores 2 --dry-run
+          snakemake --cores 2 --printshellcmds
+          snakemake --cores 2 module1_r
+          python tests/check_outputs.py
+      - name: Confirm a second invocation has no pending work
+        run: |
+          snakemake --cores 2 --dry-run > rerun.txt 2>&1
+          cat rerun.txt
+          grep -q 'Nothing to be done' rerun.txt
