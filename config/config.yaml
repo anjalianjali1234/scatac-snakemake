@@ -1,0 +1,9 @@
+# Default mode is an offline, explicitly synthetic teaching example.
+mode: demo
+genome: synthetic
+samples: config/samples.demo.tsv
+checksums: config/checksums.demo.json
+seed: 42
+demo:
+  counts: tests/data/counts.csv
+  cells: tests/data/cells.tsv
