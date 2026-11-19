@@ -1,48 +1,75 @@
-# Datasets, resources and contracts
+# Public data and input requirements
 
-No real biological dataset is bundled. Download links below were checked against the original course sources; no biological download or execution is implied.
+[Start the tutorial](tutorial.md)
 
-| Use | Dataset | Organism / assay / assembly | Approximate scale and files |
-|---|---|---|---|
-| Default mechanics | Included synthetic panel | Invented; no genome | 6 cells × 5 regions; counts CSV and cells TSV |
-| Atlas | [10x PBMC ATAC v2](https://www.10xgenomics.com/datasets/10k-human-pbmcs-atac-v2-chromium-controller-2-standard), exact downloads in [Signac 1.16](https://stuartlab.org/signac/1.16.0/articles/pbmc_vignette) | Human, scATAC, hg38; one donor | About 10,246 recovered nuclei; peak H5, `singlecell.csv`, fragments and index from Cell Ranger ATAC 2.1.0 |
-| Paired condition inference | [GSE178428](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE178428) | Human, SureCell scATAC, hg19 | Full study: 42 libraries, about 67,581 cells; select 8 libraries/4 donor pairs. Full fragment archive about 6.7 GB. Author peak BED and cell metadata are also available; retained subset size must be measured |
-| Multiome capstone | [10x paired PBMC](https://www.10xgenomics.com/datasets/pbmc-from-a-healthy-donor-granulocytes-removed-through-cell-sorting-10-k-1-standard-2-0-0), [Signac archived-file tutorial](https://stuartlab.org/signac/articles/pbmc_multiomic) | Human, paired RNA–ATAC, hg38; one donor | Use one processing version. Archived ARC 1.0.0 example: about 11,909 barcodes; feature H5 plus ATAC fragments/index |
-| Trajectory / ArchR extension | [GSE129785](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE129785), [ArchR subset](https://www.archrproject.com/articles/Articles/tutorial.html) | Human hematopoiesis, scATAC, hg19 | Prefer approximately 0.5 GB ArchR teaching download for mechanics; not a matched-donor treatment design |
+## Main tutorial dataset
+
+| Field | Value |
+|---|---|
+| Source | [10x Genomics: 10k Human PBMCs, ATAC v2, Chromium Controller](https://www.10xgenomics.com/datasets/10k-human-pbmcs-atac-v2-chromium-controller-2-standard) |
+| Organism / material | Human peripheral blood mononuclear cells; nuclei from one healthy donor |
+| Assay | Chromium single-cell ATAC v2 |
+| Processing release | Cell Ranger ATAC 2.1.0 |
+| Genome assembly | GRCh38/hg38 |
+| Vendor-reported nuclei | 10,246 |
+| Tutorial selection | 1,000 barcodes sampled with seed 42 before QC; retained count is an output |
+| License | CC BY 4.0, as stated by 10x Genomics |
+| Exact sources | [Download manifest](../config/downloads.atlas.tsv), consistent with [Signac 1.16](https://stuartlab.org/signac/1.16.0/articles/pbmc_vignette) |
+
+This dataset is useful because the processed count matrix, barcode metadata and indexed fragments are available together. Starting from those files makes the tutorial accessible without a separate FASTQ alignment setup. One donor supports an exploratory example, not a replicated condition comparison.
+
+The following sizes were measured from downloaded files on **2026-11-19**. GB/MB below are decimal units.
+
+| Local filename under `data/pbmc10k/` | Bytes | Approximate size |
+|---|---:|---:|
+| `filtered_peak_bc_matrix.h5` | 169,866,643 | 170 MB |
+| `singlecell.csv` | 32,821,340 | 33 MB |
+| `fragments.tsv.gz` | 2,641,500,673 | 2.64 GB |
+| `fragments.tsv.gz.tbi` | 1,152,837 | 1.2 MB |
+
+The four inputs total approximately **2.85 GB**. The downloader saves them locally rather than committing them to Git. `config/checksums.atlas.json` contains their measured SHA256 hashes and the sample-sheet hash; these identify the downloaded bytes, not an independently authenticated publisher signature.
+
+## File contracts
+
+Use all four files from the same release. The index must be named `fragments.tsv.gz.tbi` beside the sorted, bgzip-compressed fragment file. H5 barcodes must match the metadata and fragment source. The metadata must contain `passed_filters` and `peak_region_fragments`.
+
+Vendor FRiP is `peak_region_fragments / passed_filters`. Peak-count sums are not the same as all usable fragments. The blacklist fraction is calculated from the peak matrix, so state its denominator when comparing analyses. This workflow uses standard nuclear chromosomes and EnsDb.Hsapiens.v86 hg38 gene annotations; that annotation version need not be identical to the original alignment reference's gene annotation. No genome conversion or automatic barcode repair is attempted.
 
 ## Computing budget
 
-Planning estimates, **not measured performance**. Allow extra disk for environment installation and temporary copies. Download and installation time are excluded.
+The allowances below are planning estimates, excluding download speed and first environment installation. Consult [validation](validation.md) for any measured execution times.
 
-| Route | RAM | Free disk | Analysis time |
+| Route | RAM allowance | Free-disk allowance | Analysis-time allowance |
 |---|---:|---:|---|
-| Synthetic demo | 1–2 GB including engine | 1 GB including Python packages | Seconds after installation |
-| 2,000-cell atlas | 8–16 GB; 16 GB preferred | 15–30 GB | 15–90 minutes, potentially longer for fragment scans and doublet calling |
-| Full PBMC atlas | 16–32 GB | 25–50 GB | 1–4 hours |
-| 8-library preparation and one-lineage pseudobulk | 32 GB preferred; 64 GB for comfortable joint preprocessing | 20–50 GB | 2–8 hours preparation, then minutes for the model |
-| Full paired multiome capstone | 32–64 GB | 40–80 GB | 2–8 hours |
-| Optional full FASTQ lab | 64–128 GB, 8–16 cores | 250–500 GB | 8–24+ hours |
+| Synthetic installation check | 1–2 GB | 1 GB | Seconds after installing the engine |
+| 1,000-cell public-data tutorial | 16 GB recommended | 20 GB | About 15–90 minutes; fragment scans may take longer |
+| Full 10,246-cell capture | 32 GB recommended | 30–50 GB | About 1–4 hours |
+| Prepared paired pseudobulk model | Depends on the sparse input; 16 GB is a starting allowance | Input size plus several GB | Usually minutes for the model; preprocessing is separate |
 
-Atlas `max_cells: 2000` reduces downstream work after sparse import; it does not shrink the input H5 or fragments. The smallest real-data mechanics option is Signac's bundled `atac_small` (100 cells, 323 features, hg19); do not feed it to the hg38 atlas config. No GPU is required.
+`max_cells` reduces work after sparse H5 import; it does not reduce the raw download. A smaller subset may miss rare cell types and changes neighborhood structure and doublet sensitivity. If a machine cannot handle the import, use a capable machine to create a documented subset or use the synthetic installation check. Do not describe synthetic tests as biological results.
 
-## Atlas contract
+## Paired-donor extension
 
-Use the four exact files in `config/downloads.atlas.tsv`. The index must be named `fragments.tsv.gz.tbi` beside the position-sorted, bgzip-compressed fragment file. All barcodes in the H5 must occur in the matching metadata and fragment source. The metadata must contain `passed_filters` and `peak_region_fragments`.
+The optional `pseudobulk` workflow uses [GSE178428](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE178428): human SureCell scATAC, hg19. The supplied [sample sheet](../config/samples.paired.tsv) selects four matched donors at 6 h, control versus LPS, without Golgi inhibitor: Control6h GSM5390937–GSM5390940 and LPS6h GSM5390957–GSM5390960. Verify author metadata when preparing your own inputs. These hg19 files are not interchangeable with the tutorial's hg38 peaks.
 
-Vendor FRiP is computed as `peak_region_fragments / passed_filters`. `nCount_peaks` is a peak-count sum; it is not interchangeable with all usable fragments. State the convention when comparing reports. The workflow uses hg38 standard chromosomes and EnsDb.Hsapiens.v86 annotations. No coordinate conversion or assembly repair is attempted.
+This extension starts **after** per-capture QC/doublet handling, annotation, shared peak-set construction and recounting. Use the same documented peak universe for every retained cell. Separately called peak matrices must not simply be concatenated.
 
-## Paired pseudobulk contract
+Required inputs:
 
-Prepare these after per-capture QC/doublet handling, joint peak-set construction and lineage annotation. Use a condition-blind, documented consensus/union procedure; remove inappropriate/blacklist intervals and recount every retained cell against that same interval set. The course covers this in the peak-set and donor-inference modules.
+- `counts.mtx.gz`: sparse raw integer peak-by-cell counts; no TF-IDF, log counts or integrated values.
+- `features.tsv`: header `feature_id`, `chrom`, `start`, `end`, `genome`, in matrix row order. Use unique IDs and BED zero-based, half-open intervals.
+- `barcodes.tsv`: globally unique cell IDs, one per line without a header, in matrix column order.
+- `cells.tsv`: header `cell_id`, `sample`, `donor`, `condition`, `celltype`, in exactly barcode order. Preserve the mapping to original capture/barcode IDs.
+- `config/samples.paired.tsv`: the sample-to-donor/condition/assembly mapping. It must agree with every cell's metadata.
 
-- `counts.mtx.gz`: Matrix Market sparse **raw integer** peak × cell counts. No TF-IDF, log counts, imputed values or batch-corrected representation.
-- `features.tsv`: header `feature_id`, `chrom`, `start`, `end`, `genome`, in matrix row order. Use BED zero-based, half-open coordinates; identifiers must be unique. Any extra annotations are retained in the result table.
-- `barcodes.tsv`: one globally unique cell ID per line, no header, in matrix column order. Prefix library IDs where original barcodes repeat.
-- `cells.tsv`: header `cell_id`, `sample`, `donor`, `condition`, `celltype`, in exactly the barcode order. Retain an explicit mapping to the original capture/barcode for fragment access. Use reviewed lineage labels; this repository does not assert that GEO already provides the chosen annotation.
-- `config/samples.paired.tsv`: every sample mapped to its independent donor, condition and assembly. Its donor/condition values must agree with every cell.
+After preparing and reviewing those inputs, edit `config/pseudobulk.yaml`, then run:
 
-The example contrast uses Control6h GSM5390937–GSM5390940 and LPS6h GSM5390957–GSM5390960, with the same four donors in order and no Golgi inhibitor. Verify this mapping against GEO and author metadata when constructing your own files. Do not combine these hg19 files with the hg38 atlas peaks.
+```bash
+python scripts/pin_inputs.py --config config/pseudobulk.yaml
+snakemake --configfile config/pseudobulk.yaml --cores 2 --sdm conda --dry-run
+snakemake --configfile config/pseudobulk.yaml --cores 2 --sdm conda
+```
 
-The supplied model aggregates within donor × condition × chosen lineage, requires all donor pairs and the configured minimum cell support, filters low-count peaks with edgeR `filterByExpr`, and fits `~ donor + condition`. All tested peaks remain in the result table; the separate feature filter records the testing universe. FDR adjustment covers the tested peaks for this contrast, not arbitrary additional lineages/contrasts. TMM can mask global directional changes; inspect normalization and consider external controls or a justified alternative where appropriate.
+The model sums raw counts within donor × condition × selected cell type, checks pair/cell support, filters low-count peaks, and uses edgeR with `~ donor + condition`. All tested peaks are retained in the statistics table with effect sizes and FDR. Missing donor pairs and conflicting sample metadata cause an error. Individual cells cannot create independent biological replication.
 
-Hashes are generated from the actual local files by `scripts/pin_inputs.py`. None are invented for undownloaded data. Keep source URLs, accession mappings, data usage terms and preprocessing provenance alongside the files.
+Additional covariates, unpaired designs and repeated time courses need a reviewed model change. TMM normalization can obscure global directional changes, and a completely confounded design cannot be repaired by adding terms. Real GSE178428 preprocessing and biological condition testing are not claimed as executed here; the extension has a separate synthetic integration test.

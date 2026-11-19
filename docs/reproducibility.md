@@ -1,43 +1,83 @@
-# Reproducibility and extension guide
+# Reproducibility and troubleshooting
+
+[Start the tutorial](tutorial.md) · [Validation record](validation.md)
 
 ## What is recorded
 
-Each mode writes a provenance JSON containing effective parameters, input SHA256 hashes and sizes, analysis-source hashes, the available Git commit/dirty state, Python/Snakemake versions and platform. R jobs write `sessionInfo`; Snakemake writes rule logs and benchmark TSVs. Random seeds are explicit. Multi-threaded numerical libraries are limited in biological jobs; different operating systems and library builds may still produce small floating-point differences.
+Each run writes its effective parameters, actual input SHA256 hashes and sizes, analysis-source hashes, Python/Snakemake versions, platform and available Git commit/dirty state to `provenance.json`. R jobs write `sessionInfo`; Snakemake keeps rule logs and benchmark TSVs. Seeds are explicit, and numerical-library threads are limited for the biological steps.
 
-`requirements.lock` records the exact installed Python packages. It is a version freeze, not a pip artifact-hash lock. Python 3.12.14 and the operating system remain part of the environment contract. Conda YAMLs pin top-level analysis versions. They become full platform locks only when all dependencies have been solved and the resulting explicit specs have been recorded. Consult `validation.md` for what was actually installed/tested.
+A seed is one part of reproducibility. Input identity, feature definitions, annotation version, library builds and analyst decisions also matter. Numerical results can vary slightly across platforms even with the same seed.
 
-For a working Conda environment, save its real platform-specific explicit specification alongside the YAML. Snakemake supports the naming convention below:
+## Environments
+
+`requirements.lock` records the exact Python package versions from the installed engine environment. It is a version freeze, not a pip artifact-hash lock. The R recipes pin top-level versions; the supplied Linux explicit specifications record actual installed Conda package URLs and artifact identities. The `atac` environment includes the HDF5 reader required for the 10x H5 input.
+
+Use Linux x86_64 for the reference path. Snakemake recognizes `atac.linux-64.pin.txt` alongside `atac.yaml` when deploying on that platform. Other platforms may solve the YAML recipe differently and require their own validation. Some Bioconductor data packages also download annotation resources in post-install steps; those resources depend on the package's recorded URLs and integrity checks.
+
+An alternative to Snakemake-managed environments is to create and activate the explicit Linux environment yourself:
 
 ```bash
-# Replace the path with the actual environment created for this YAML.
-# This is a command template: the placeholder is not a real environment name.
-conda list --explicit --prefix /absolute/path/to/solved/environment > workflow/envs/atac.linux-64.pin.txt
+conda create --name scatac-atac --file workflow/envs/atac.linux-64.pin.txt
+conda activate scatac-atac
 ```
 
-Review that it contains public package URLs without embedded credentials. Commit the solved pin file, environment recipe and actual session information. Do not create an `renv.lock` or explicit package lock by guessing transitive versions. The course also explains an alternative R/renv installation path.
+Keep Snakemake available from the Python engine environment, for example by invoking its absolute executable path. With `Rscript` from the exact analysis environment on `PATH`, run the same Snakemake commands **without** `--sdm conda`. Do not accidentally run an unrelated system R.
 
-Input hashes deliberately fail on changed data. Investigate a mismatch before accepting a new data version. To accept an intentional revision, keep the old lock in Git history, record why the source changed, and create a new checked lock. The pinning script refuses to overwrite an existing one. Checksums establish content identity, not publisher authenticity or data availability.
+The [validation record](validation.md) specifies which installation path was tested. A successful package solve alone is not evidence that the biological workflow executed.
 
-## Analyst decisions remain explicit
+## Input locks
 
-The atlas first generates QC metrics without retaining or removing cells by universal cutoffs. It then requires a written threshold justification; LSI output similarly precedes a documented dimension choice. The initial QC thresholds and doublet prior are teaching suggestions. Rerun sensitivity analyses when a decision materially changes the cell population or interpretation. A dimensional component can reflect both depth and real biology; no rule automatically removes component 1.
+For the provided public dataset, use the committed `config/checksums.atlas.json`. It records actual downloaded content identities. The workflow fails on mismatches instead of accepting a changed file silently.
 
-Doublets are scored using scDblFinder's ATAC feature aggregation and an explicit capture-level prior. A random cell subset does not have a proportionally smaller true doublet rate. Subsetting can still change class balance and detection sensitivity, and homotypic doublets remain difficult to detect. Review the full capture where feasible.
+When adapting the tutorial to new data, preserve the original manifest, create a new sample/config file and choose a new checksum path. Review source accession, release, assembly and file pairing before running:
 
-The paired model checks donor/sample attribution before testing. It does not fix confounding, invent replication, infer missing donor identities or automatically discard poorly supported pairs. A study design change should be explicit and versioned.
+```bash
+# Command template: replace the config path with your real reviewed config.
+python scripts/pin_inputs.py --config config/my_dataset.yaml
+```
 
-## Extend the course into new rules
+The script refuses to overwrite an existing lock. A checksum cannot recover a deleted file or establish the publisher's authenticity. Keep a durable copy of the approved inputs and the original source URLs.
 
-1. Keep the complete [course](course.md) as the learning and interpretation guide. Deliver subsequent modules as lessons one at a time; their lesson snippets are not automatically all pipeline-ready.
-2. Define the new rule's input artifact and data contract first: assembly, raw/normalized state, peak universe, cell IDs and independent samples.
-3. Put its parameterized R/Python script in `workflow/scripts`, add a rule and separate environment where needed, and list every output consumed downstream.
-4. Add tiny tests for meaningful failure modes or known quantitative behavior. Do not claim a smoke test validates an entire biological method.
-5. Preserve true upstream inputs and provenance; emit actual figures and full statistics. Keep human interpretation separate from automatic cluster names.
+## Efficient reruns
 
-Motifs/chromVAR, peak–gene associations, reference mapping, trajectories, ArchR and paired multiome WNN are planned extensions described in the course and capstones. FASTQ alignment/barcode/duplicate processing is intentionally a separate advanced lab, using a documented Cell Ranger ATAC installation and matching reference. No proprietary software, reference genome or multi-GB dataset is silently installed by the default example.
+The atlas rules separate parameters by stage. QC depends on input files, the sample sheet, input lock, selected-cell count, doublet prior and seed. Filtering/LSI depends on the QC result, filter choices and requested rank. The final embedding depends on LSI output, selected dimensions, resolution and seed.
 
-## GitHub checks
+The full run manifest is audited, but its timestamp alone does not trigger another expensive QC scan when only a downstream review decision changes. Snakemake still tracks the explicit stage parameters and direct data inputs. Editing an analysis script or environment can legitimately rerun the affected work.
 
-The CI workflow installs the versioned Python engine and R 4.5.1, tests input contracts and R/Python agreement, parses all R scripts, executes the synthetic workflow and checks that a second run has nothing pending. It does not download real data or claim to validate atlas results. GitHub Actions itself must be enabled by the repository/account; a committed workflow is not evidence that a remote run passed.
+Use a dry-run to inspect the reason for any rerun:
 
-Official references: [Snakemake deployment and environment pin files](https://snakemake.readthedocs.io/en/stable/snakefiles/deployment.html), [configuration validation](https://snakemake.readthedocs.io/en/stable/snakefiles/configuration.html), [Signac 1.16 workflow](https://stuartlab.org/signac/1.16.0/articles/pbmc_vignette), [scDblFinder ATAC methods](https://plger.github.io/scDblFinder/articles/scATAC.html), [edgeR](https://bioconductor.org/packages/3.22/bioc/html/edgeR.html).
+```bash
+snakemake --configfile config/atlas.yaml --cores 2 --sdm conda --dry-run
+```
+
+Do not use `--touch`, remove checksum checks, or fabricate output files to force a workflow to appear complete. Preserve failed-job logs before fixing the cause.
+
+## Scientific decisions
+
+The guided config requires a QC rationale and an LSI rationale. These are local scientific review checkpoints; they do not require a software account approval. Write observations from the figures, the choice you made, and an important alternative or limitation.
+
+Doublet classification is imperfect, especially for similar cell types and subsets. QC thresholds can remove genuine populations. Depth-associated components can contain biology. Cluster resolution and cell selection affect granularity. Assess sensitivity where a choice changes the conclusion.
+
+The gene-activity assay is called `ACTIVITY` because it is not RNA. Record multiple marker observations and contradictory evidence in your annotation table. Keep uncertain labels broad or unassigned. The single-donor tutorial does not establish a condition effect.
+
+## Common problems
+
+| Problem | Action |
+|---|---|
+| 404 on the repository | Sign into the owning or invited GitHub account; the repository is private |
+| H5 import asks for `hdf5r` | Use the updated pinned atlas environment, not a previous/incomplete environment |
+| Conda cannot create an environment | Save the solver log; verify platform, channels and disk space before changing versions |
+| `Rscript` loads unexpected packages | Use `--sdm conda`, or explicitly check the activated environment and `sessionInfo()` |
+| Interrupted download | Rerun `scripts/download_atlas.py`; it resumes `.partial` files |
+| Hash mismatch | Check source/release and file completeness; do not regenerate hashes as a shortcut |
+| QC/LSI review error | Review diagnostics and fill the relevant config rationale |
+| Memory exhaustion | Reduce downstream cells or use a larger machine; full H5 import and fragments remain |
+| A report image does not open | Keep `report.html` beside its generated PNGs/tables; use the PDF for a portable figure bundle |
+
+## GitHub checks and extensions
+
+The CI workflow installs the pinned Python engine and R, tests input contracts and R/Python agreement, parses R scripts, runs the synthetic installation check and verifies an unchanged rerun. It does not download several GB of public data on every push. The optional edgeR integration test executes when its R dependencies are available; skipped tests must not be reported as passed.
+
+For a new method, first define its inputs, assembly, cell IDs, feature universe and statistical unit. Put the parameterized script in `workflow/scripts`, declare real dependencies/outputs, pin the environment and test meaningful failure modes. Preserve raw inputs and emit actual results rather than illustrative figures.
+
+References: [Snakemake deployment](https://snakemake.readthedocs.io/en/stable/snakefiles/deployment.html), [versioned Signac workflow](https://stuartlab.org/signac/1.16.0/articles/pbmc_vignette), [scDblFinder ATAC methods](https://plger.github.io/scDblFinder/articles/scATAC.html).
